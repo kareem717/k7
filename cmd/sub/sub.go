@@ -6,6 +6,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	test string
+)
+
 var SubCmd = &cobra.Command{
 	Use:   "sub",
 	Short: "A brief description of your command",
@@ -15,4 +19,10 @@ var SubCmd = &cobra.Command{
 	},
 }
 
-func init() {}
+func init() {
+	SubCmd.Flags().StringVarP(&test, "test", "t", "", "test flag")
+
+	if err := SubCmd.MarkFlagRequired("test"); err != nil {
+		fmt.Println(err)
+	}
+}
