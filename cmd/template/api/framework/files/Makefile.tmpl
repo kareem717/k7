@@ -1,0 +1,21 @@
+# Simple Makefile for a Go project
+
+build:
+	{{if .UnixBased }}@go build -o bin/{{.APIName }} main.go{{ else }}@go build -o bin/{{ .APIName }}.exe main.go{{ end }}
+
+run: build
+	@./bin/proj
+
+install:
+	@go get ./...
+	@go mod vendor
+	@go mod tidy
+	@go mod download
+
+test:
+	@echo "Testing..."
+	@go test ./... -v
+
+watch:
+	@air -c .air.toml
+
