@@ -2,7 +2,6 @@
 // each step of the CLI
 package steps
 
-
 // A StepSchema contains the data that is used
 // for an individual step of the CLI
 type StepSchema struct {
@@ -20,7 +19,12 @@ type Steps struct {
 // An Item contains the data for each option
 // in a StepSchema.Options
 type Item struct {
-	Flag, Title, Desc string
+	// Flag is the flag that is used to declare the value of the step
+	Flag string
+	// Title is the title of the option, if there is no flag, the title is used as the step value
+	Title string
+	// Desc is the description of the option
+	Desc string
 }
 
 type StepName string

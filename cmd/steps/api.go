@@ -2,6 +2,8 @@
 // each step of the CLI
 package steps
 
+import flags "github.com/kareem717/k7/cmd/flags/api"
+
 const (
 	APIName      StepName = "Name"
 	APIFramework StepName = "Framework"
@@ -37,6 +39,7 @@ func APISteps() *Steps {
 					{
 						Title: "Huma",
 						Desc:  "A modern, simple, fast & flexible micro framework for building HTTP REST/RPC APIs in Go backed by OpenAPI 3 and JSON Schema",
+						Flag:  string(flags.Huma),
 					},
 				},
 				Headers: "What API framework do you want to use in your Go project?",
@@ -47,19 +50,10 @@ func APISteps() *Steps {
 					{
 						Title: "Postgres",
 						Desc:  "PostgreSQL is a powerful, open source object-relational database system",
+						Flag:  string(flags.Postgres),
 					},
 				},
 				Headers: "What database do you want to use in your Go project?",
-			},
-			DBDriver.String(): {
-				StepName: string(DBDriver),
-				Options: []Item{
-					{
-						Title: "Uptrace Bun",
-						Desc:  "SQL-first Golang ORM for PostgreSQL, MySQL, MSSQL, and SQLite",
-					},
-				},
-				Headers: "What database driver do you want to use in your Go project?",
 			},
 		},
 	}

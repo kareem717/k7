@@ -90,7 +90,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "y":
 			if len(m.selected) == 1 {
 				for selectedKey := range m.selected {
-					m.choice.Update(m.choices[selectedKey].Title)
+					// If the choice has a flag, update the choice with the flag
+					if m.choices[selectedKey].Flag != "" {
+						m.choice.Update(m.choices[selectedKey].Flag)
+					} else {
+						m.choice.Update(m.choices[selectedKey].Title)
+					}
+
 					m.cursor = selectedKey
 				}
 				return m, tea.Quit

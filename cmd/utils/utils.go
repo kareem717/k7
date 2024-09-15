@@ -5,6 +5,7 @@ package utils
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"os/exec"
 	"strings"
 
@@ -48,13 +49,20 @@ func NonInteractiveCommand(use string, flagSet *pflag.FlagSet) string {
 
 // ExecuteCmd provides a shorthand way to run a shell command
 func ExecuteCmd(name string, args []string, dir string) error {
-	command := exec.Command(name, args...)
-	command.Dir = dir
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+
 	var out bytes.Buffer
-	command.Stdout = &out
-	if err := command.Run(); err != nil {
-		return err
+	var stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		log.Printf("Command execution failed: %s %v\nOutput: %s\nError: %s\n", name, args, out.String(), stderr.String())
+		return fmt.Errorf("command execution failed: %w", err)
 	}
+
 	return nil
 }
 

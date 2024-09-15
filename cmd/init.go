@@ -96,9 +96,9 @@ var initCmd = &cobra.Command{
 			log.Printf("appType: %v", appType)
 			switch appType {
 			case flags.AppAPI:
-
 				steps := stepsPkg.APISteps()
 				isInteractive = true
+
 				tprogram := tea.NewProgram(textinput.InitialTextInputModel(options.APIName, "What is the name of your project?", project))
 				if _, err := tprogram.Run(); err != nil {
 					log.Printf("Name of project contains an error: %v", err)
@@ -116,26 +116,32 @@ var initCmd = &cobra.Command{
 				}
 
 				// CREATE APP TYPE STEP
-				isInteractive = true
-				for _, step := range steps.Steps {
+				for name, step := range steps.Steps {
 					selection := &multiInput.Selection{}
 					tprogram = tea.NewProgram(multiInput.InitialModelMulti(step.Options, selection, step.Headers, project))
 					if _, err := tprogram.Run(); err != nil {
 						cobra.CheckErr(textinput.CreateErrorInputModel(err).Err())
 					}
 
+					// Retrieve the struct, modify it, and reassign it back to the map
 					step.Field = selection.Choice
+					steps.Steps[name] = step
+					log.Printf("step.%s: %s", name, step.Field) // Logs the current step's field value
 					project.ExitCLI(tprogram)
 				}
+
+				log.Printf("steps: %+v", steps.Steps) // Logs the final state of all steps
 
 				apiApp := project.CreateAPIApp(
 					name,
 					project.AbsolutePath,
 					apiFlags.Framework(steps.Steps[stepsPkg.APIFramework.String()].Field),
-					apiFlags.Database(steps.Steps[stepsPkg.DBMS.String()].Field),
+					apiFlags.DBMS(steps.Steps[stepsPkg.DBMS.String()].Field),
 					flags.Git(steps.Steps[stepsPkg.GitRepo.String()].Field),
 					project.UnixBased,
 				)
+
+				log.Printf("apiApp: %+v", apiApp)
 
 				err = apiApp.CreateMainFile()
 			}

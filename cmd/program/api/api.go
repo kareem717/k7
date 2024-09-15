@@ -28,9 +28,9 @@ type APIApp struct {
 	Exit         bool
 	AbsolutePath string
 	Framework    apiFlags.Framework
-	DBDriver     apiFlags.Database
+	DBMS         apiFlags.DBMS
 	FrameworkMap map[apiFlags.Framework]Framework
-	DBDriverMap  map[apiFlags.Database]Driver
+	DBMSMap      map[apiFlags.DBMS]Driver
 	GitOptions   flags.Git
 	UnixBased    bool
 }
@@ -39,7 +39,7 @@ func NewAPIApp(
 	name string,
 	absolutePath string,
 	framework apiFlags.Framework,
-	dbDriver apiFlags.Database,
+	dbms apiFlags.DBMS,
 	gitOptions flags.Git,
 	unixBased bool,
 ) APIApp {
@@ -48,8 +48,8 @@ func NewAPIApp(
 		AbsolutePath: absolutePath,
 		Framework:    framework,
 		FrameworkMap: make(map[apiFlags.Framework]Framework),
-		DBDriver:     dbDriver,
-		DBDriverMap:  make(map[apiFlags.Database]Driver),
+		DBMS:         dbms,
+		DBMSMap:      make(map[apiFlags.DBMS]Driver),
 		GitOptions:   gitOptions,
 		UnixBased:    unixBased,
 	}
@@ -130,7 +130,7 @@ func (p *APIApp) createFrameworkMap() {
 }
 
 func (p *APIApp) createDBMSMap() {
-	p.DBDriverMap[apiFlags.Postgres] = Driver{
+	p.DBMSMap[apiFlags.Postgres] = Driver{
 		//TODO: clean this up
 		packageName: append(append(pgxPostgresDriver, bunPackages...), bunPgDialectPackage...),
 		templater:   dbms.PostgresTemplate{},
@@ -173,7 +173,7 @@ func (p *APIApp) CreateMainFile() error {
 		}
 	}
 
-	fmt.Printf("p.ProjectPath: %v\n", p.AbsolutePath)
+	fmt.Printf("projectPath: %v\n", projectPath)
 
 	// Define Operating system
 	p.SetUnixBased()
@@ -198,8 +198,7 @@ func (p *APIApp) CreateMainFile() error {
 		cobra.CheckErr(err)
 	}
 
-
-	err = utils.GoGetPackage(projectPath, p.DBDriverMap[p.DBDriver].packageName)
+	err = utils.GoGetPackage(projectPath, p.DBMSMap[p.DBMS].packageName)
 	if err != nil {
 		log.Printf("Could not install go dependency for chosen driver %v\n", err)
 		cobra.CheckErr(err)
@@ -213,9 +212,9 @@ func (p *APIApp) CreateMainFile() error {
 	}
 
 	//TODO: I don't think this is setting stuff up properly
-	err = p.CreateFileWithInjection(internalStoreagePath, projectPath, "database.go", "database")
+	err = p.CreateFileWithInjection(internalStoreagePath, projectPath, "DBMS.go", "DBMS")
 	if err != nil {
-		log.Printf("Error injecting database.go file: %v", err)
+		log.Printf("Error injecting DBMS.go file: %v", err)
 		cobra.CheckErr(err)
 		return err
 	}
@@ -409,27 +408,26 @@ func (p *APIApp) CreateFileWithInjection(pathToCreate string, projectPath string
 		routeFileBytes := p.FrameworkMap[p.Framework].templater.Routes()
 		createdTemplate := template.Must(template.New(fileName).Parse(string(routeFileBytes)))
 		err = createdTemplate.Execute(createdFile, p)
-	case "database":
+	case "DBMS":
 		log.Printf("createdTemplate: %v", "there")
-		log.Printf("templater: %v", p.DBDriverMap[p.DBDriver].templater)
-		log.Printf("driver: %v", p.DBDriver)
+		log.Printf("templater: %v", p.DBMSMap[p.DBMS].templater)
+		log.Printf("driver: %v", p.DBMS)
 
-
-		createdTemplate := template.Must(template.New(fileName).Parse(string(p.DBDriverMap[p.DBDriver].templater.Service())))
+		createdTemplate := template.Must(template.New(fileName).Parse(string(p.DBMSMap[p.DBMS].templater.Service())))
 		log.Printf("createdTemplate: %v", "here")
 		err = createdTemplate.Execute(createdFile, p)
 	case "integration-tests":
-		createdTemplate := template.Must(template.New(fileName).Parse(string(p.DBDriverMap[p.DBDriver].templater.Tests())))
+		createdTemplate := template.Must(template.New(fileName).Parse(string(p.DBMSMap[p.DBMS].templater.Tests())))
 		err = createdTemplate.Execute(createdFile, p)
 	case "tests":
 		createdTemplate := template.Must(template.New(fileName).Parse(string(p.FrameworkMap[p.Framework].templater.TestHandler())))
 		err = createdTemplate.Execute(createdFile, p)
 	case "env":
-		if p.DBDriver != "none" {
+		if p.DBMS != "none" {
 
 			envBytes := [][]byte{
 				tpl.GlobalEnvTemplate(),
-				p.DBDriverMap[p.DBDriver].templater.Env(),
+				p.DBMSMap[p.DBMS].templater.Env(),
 			}
 			createdTemplate := template.Must(template.New(fileName).Parse(string(bytes.Join(envBytes, []byte("\n")))))
 			err = createdTemplate.Execute(createdFile, p)

@@ -38,10 +38,10 @@ func (p *Project) CreateAPIApp(
 	name string,
 	absolutePath string,
 	framework apiFlags.Framework,
-	dbDriver apiFlags.Database,
+	dbms apiFlags.DBMS,
 	gitOptions flags.Git,
 	unixBased bool,
 ) api.APIApp {
-	app := api.NewAPIApp(name, absolutePath, framework, dbDriver, gitOptions, unixBased)
+	app := api.NewAPIApp(name, absolutePath, framework, dbms, gitOptions, unixBased)
 	return app
 }
