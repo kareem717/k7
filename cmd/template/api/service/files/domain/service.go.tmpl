@@ -1,0 +1,18 @@
+package domain
+
+import (
+	"{{ .Name }}/internal/service"
+	"{{ .Name }}/internal/service/domain/health"
+	"{{ .Name }}/internal/service/domain/foo"
+	"{{ .Name }}/internal/storage"
+)
+
+// NewService implementation for storage of all services.
+func NewService(
+	repositories storage.Repository,
+) *service.Service {
+	return &service.Service{
+		FooService: foo.NewFooService(repositories),
+		HealthService:  health.NewHealthService(repositories),
+	}
+}

@@ -14,7 +14,9 @@ import (
 
 	"github.com/kareem717/k7/cmd/program/shared"
 	"github.com/kareem717/k7/cmd/template/api/dbms"
+	"github.com/kareem717/k7/cmd/template/api/entities"
 	"github.com/kareem717/k7/cmd/template/api/framework"
+	"github.com/kareem717/k7/cmd/template/api/service"
 	"github.com/kareem717/k7/cmd/utils"
 	"github.com/spf13/cobra"
 )
@@ -25,6 +27,8 @@ type APIApp struct {
 	Name         string
 	FrameworkMap map[apiFlags.Framework]Framework
 	DBMSMap      map[apiFlags.DBMS]DBMS
+	Service      Service
+	Entities     Entities
 	shared.Options
 }
 
@@ -59,6 +63,16 @@ type DBMS struct {
 	templater        dbms.Templater
 }
 
+type Service struct {
+	packageName []string
+	templater   service.Templater
+}
+
+type Entities struct {
+	packageName []string
+	templater   entities.Templater
+}
+
 var (
 	initPackages = []string{"go.uber.org/zap", "github.com/joho/godotenv"}
 
@@ -79,6 +93,7 @@ const (
 	internalServerPath   = "internal/server"
 	internalStoreagePath = "internal/storage"
 	internalServicePath  = "internal/service"
+	internalEntitiesPath = "internal/entities"
 )
 
 // CheckOs checks Operation system and generates MakeFile and `go build` command
@@ -101,10 +116,24 @@ func (p *APIApp) createFrameworkMap() {
 func (p *APIApp) createDBMSMap() {
 	p.DBMSMap[apiFlags.Postgres] = DBMS{
 		name:             "postgres",
-		initialMigration: "0_foo.sql",
+		initialMigration: "2000000000000_init.sql",
 		//TODO: clean this up
 		packageName: append(append(pgxPostgresDriver, bunPackages...), bunPgDialectPackage...),
 		templater:   dbms.PostgresTemplate{},
+	}
+}
+
+func (p *APIApp) createService() {
+	p.Service = Service{
+		packageName: humaPackage,
+		templater:   service.Templater{},
+	}
+}
+
+func (p *APIApp) createEntities() {
+	p.Entities = Entities{
+		packageName: humaPackage,
+		templater:   entities.Templater{},
 	}
 }
 
@@ -153,6 +182,10 @@ func (p *APIApp) CreateMainFile() error {
 	// Install the correct package for the selected driver
 	p.createDBMSMap()
 
+	p.createService()
+
+	p.createEntities()
+
 	// Create go.mod
 	err = utils.InitGoMod(p.Name, projectPath)
 	if err != nil {
@@ -171,6 +204,20 @@ func (p *APIApp) CreateMainFile() error {
 	err = utils.GoGetPackage(projectPath, p.DBMSMap[p.DBMS].packageName)
 	if err != nil {
 		log.Printf("Could not install go dependency for chosen DBMS %v\n", err)
+		cobra.CheckErr(err)
+	}
+
+	// Install the correct package for the selected entities
+	err = utils.GoGetPackage(projectPath, p.Entities.packageName)
+	if err != nil {
+		log.Printf("Could not install go dependency for chosen entities %v\n", err)
+		cobra.CheckErr(err)
+	}
+
+	// Install the correct package for the selected entities
+	err = utils.GoGetPackage(projectPath, p.Entities.packageName)
+	if err != nil {
+		log.Printf("Could not install go dependency for chosen entities %v\n", err)
 		cobra.CheckErr(err)
 	}
 
@@ -199,6 +246,20 @@ func (p *APIApp) CreateMainFile() error {
 	err = p.injectWorkspaceFiles(injector)
 	if err != nil {
 		log.Printf("Error injecting workspace files: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	err = p.injectServiceFiles(injector)
+	if err != nil {
+		log.Printf("Error injecting service files: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	err = p.injectEntitiesFiles(injector)
+	if err != nil {
+		log.Printf("Error injecting entities files: %v", err)
 		cobra.CheckErr(err)
 		return err
 	}
@@ -255,27 +316,39 @@ func (p *APIApp) CreateMainFile() error {
 }
 
 func (p *APIApp) injectDBMSFiles(ti *shared.TemplateInjector) error {
+	dbmsConfig := p.DBMSMap[p.DBMS]
+
 	// Create implementation agnostic helper file
-	err := ti.Inject(filepath.Join(internalStoreagePath, "shared/shared.go"), dbms.SharedFileTemplate())
+	filePath := filepath.Join(internalStoreagePath, dbmsConfig.name, "shared", "shared.go")
+	err := ti.Inject(filePath, dbmsConfig.templater.Shared())
 	if err != nil {
-		log.Printf("Error injecting shared/shared.go file: %v", err)
+		log.Printf("Error injecting %s file: %v", filePath, err)
 		cobra.CheckErr(err)
 		return err
 	}
 
 	// Create the storage.go interface file
-	err = ti.Inject(filepath.Join(internalStoreagePath, "storage.go"), dbms.InterfaceTemplate())
+	filePath = filepath.Join(internalStoreagePath, "storage.go")
+	err = ti.Inject(filePath, dbms.InterfaceTemplate())
 	if err != nil {
-		log.Printf("Error injecting migrations/0_foo.sql file: %v", err)
+		log.Printf("Error injecting %s file: %v", filePath, err)
 		cobra.CheckErr(err)
 		return err
 	}
 
-	dbmsConfig := p.DBMSMap[p.DBMS]
+	// Create the storage.go interface file
+	filePath = filepath.Join(internalStoreagePath, dbmsConfig.name, "foo", "foo.go")
+	err = ti.Inject(filePath, dbmsConfig.templater.Foo())
+	if err != nil {
+		log.Printf("Error injecting %s file: %v", filePath, err)
+		cobra.CheckErr(err)
+		return err
+	}
 
 	// Create initial migration file
 	initMigrationFile := fmt.Sprintf("%s/migrations/%s", dbmsConfig.name, dbmsConfig.initialMigration)
-	err = ti.Inject(filepath.Join(internalStoreagePath, initMigrationFile), dbmsConfig.templater.InitialMigration())
+	filePath = filepath.Join(internalStoreagePath, initMigrationFile)
+	err = ti.Inject(filePath, dbmsConfig.templater.InitialMigration())
 	if err != nil {
 		log.Printf("Error injecting migrations/0_foo.sql file: %v", err)
 		cobra.CheckErr(err)
@@ -284,9 +357,10 @@ func (p *APIApp) injectDBMSFiles(ti *shared.TemplateInjector) error {
 
 	// Create DBMS specific implementation file
 	implementationFile := fmt.Sprintf("%s/storage.go", dbmsConfig.name)
-	err = ti.Inject(filepath.Join(internalStoreagePath, implementationFile), dbmsConfig.templater.Implementation())
+	filePath = filepath.Join(internalStoreagePath, implementationFile)
+	err = ti.Inject(filePath, dbmsConfig.templater.Implementation())
 	if err != nil {
-		log.Printf("Error injecting migrations/0_foo.sql file: %v", err)
+		log.Printf("Error injecting %s file: %v", filePath, err)
 		cobra.CheckErr(err)
 		return err
 	}
@@ -298,7 +372,7 @@ func (p *APIApp) injectWorkspaceFiles(ti *shared.TemplateInjector) error {
 	// Create gitignore
 	err := ti.Inject(".gitignore", framework.GitIgnoreTemplate())
 	if err != nil {
-		log.Printf("Error injecting shared/shared.go file: %v", err)
+		log.Printf("Error injecting .gitignore file: %v", err)
 		cobra.CheckErr(err)
 		return err
 	}
@@ -306,7 +380,7 @@ func (p *APIApp) injectWorkspaceFiles(ti *shared.TemplateInjector) error {
 	// Create air config file
 	err = ti.Inject(".air.toml", framework.AirTomlTemplate())
 	if err != nil {
-		log.Printf("Error injecting shared/shared.go file: %v", err)
+		log.Printf("Error injecting .air.toml file: %v", err)
 		cobra.CheckErr(err)
 		return err
 	}
@@ -314,7 +388,7 @@ func (p *APIApp) injectWorkspaceFiles(ti *shared.TemplateInjector) error {
 	// Create Makefile
 	err = ti.Inject("Makefile", framework.MakeTemplate())
 	if err != nil {
-		log.Printf("Error injecting shared/shared.go file: %v", err)
+		log.Printf("Error injecting Makefile file: %v", err)
 		cobra.CheckErr(err)
 		return err
 	}
@@ -322,7 +396,7 @@ func (p *APIApp) injectWorkspaceFiles(ti *shared.TemplateInjector) error {
 	// Create README.md
 	err = ti.Inject("README.md", framework.ReadmeTemplate())
 	if err != nil {
-		log.Printf("Error injecting shared/shared.go file: %v", err)
+		log.Printf("Error injecting README.md file: %v", err)
 		cobra.CheckErr(err)
 		return err
 	}
@@ -340,60 +414,128 @@ func (p *APIApp) injectFrameworkFiles(ti *shared.TemplateInjector) error {
 		return err
 	}
 
-	err = ti.Inject(filepath.Join(internalServerPath, "server.go"), frameworkConfig.templater.Server())
+	filePath := filepath.Join(internalServerPath, "server.go")
+	err = ti.Inject(filePath, frameworkConfig.templater.Server())
 	if err != nil {
-		log.Printf("Error injecting server.go file: %v", err)
+		log.Printf("Error injecting %s file: %v", filePath, err)
 		cobra.CheckErr(err)
 		return err
 	}
 
-	err = ti.Inject(filepath.Join(internalServerPath, "router.go"), frameworkConfig.templater.Router())
+	filePath = filepath.Join(internalServerPath, "router.go")
+	err = ti.Inject(filePath, frameworkConfig.templater.Router())
 	if err != nil {
-		log.Printf("Error injecting router.go file: %v", err)
+		log.Printf("Error injecting %s file: %v", filePath, err)
 		cobra.CheckErr(err)
 		return err
 	}
 
-	err = ti.Inject(filepath.Join(internalServerPath, "middleware/auth.go"), frameworkConfig.templater.Middleware().Auth)
+	filePath = filepath.Join(internalServerPath, "middleware/auth.go")
+	err = ti.Inject(filePath, frameworkConfig.templater.Middleware().Auth)
 	if err != nil {
-		log.Printf("Error injecting router.go file: %v", err)
+		log.Printf("Error injecting %s file: %v", filePath, err)
 		cobra.CheckErr(err)
 		return err
 	}
 
-	err = ti.Inject(filepath.Join(internalServerPath, "middleware/shared.go"), frameworkConfig.templater.Middleware().Shared)
+	filePath = filepath.Join(internalServerPath, "middleware/shared.go")
+	err = ti.Inject(filePath, frameworkConfig.templater.Middleware().Shared)
 	if err != nil {
-		log.Printf("Error injecting router.go file: %v", err)
+		log.Printf("Error injecting %s file: %v", filePath, err)
 		cobra.CheckErr(err)
 		return err
 	}
 
 	for _, handler := range frameworkConfig.templater.Handlers().Handlers {
-		err = ti.Inject(filepath.Join(internalServerPath, "handlers", handler.Name, "handler.go"), handler.Handler)
+		filePath = filepath.Join(internalServerPath, "handler", handler.Name, "handler.go")
+		err = ti.Inject(filePath, handler.Handler)
 		if err != nil {
-			log.Printf("Error injecting router.go file: %v", err)
+			log.Printf("Error injecting %s file: %v", filePath, err)
 			cobra.CheckErr(err)
 			return err
 		}
 
-		err = ti.Inject(filepath.Join(internalServerPath, "handlers", handler.Name, "routes.go"), handler.Routes)
+		filePath = filepath.Join(internalServerPath, "handler", handler.Name, "routes.go")
+		err = ti.Inject(filePath, handler.Routes)
 		if err != nil {
-			log.Printf("Error injecting router.go file: %v", err)
+			log.Printf("Error injecting %s file: %v", filePath, err)
 			cobra.CheckErr(err)
 			return err
 		}
 	}
 
-	err = ti.Inject(filepath.Join(internalServerPath, "handlers/shared/auth.go"), frameworkConfig.templater.Handlers().Shared.Auth)
+	filePath = filepath.Join(internalServerPath, "handler/shared/auth.go")
+	err = ti.Inject(filePath, frameworkConfig.templater.Handlers().Shared.Auth)
 	if err != nil {
-		log.Printf("Error injecting router.go file: %v", err)
+		log.Printf("Error injecting %s file: %v", filePath, err)
 		cobra.CheckErr(err)
 		return err
 	}
 
-	err = ti.Inject(filepath.Join(internalServerPath, "handlers/shared/schemas.go"), frameworkConfig.templater.Handlers().Shared.Schemas)
+	filePath = filepath.Join(internalServerPath, "handler/shared/schemas.go")
+	err = ti.Inject(filePath, frameworkConfig.templater.Handlers().Shared.Schemas)
 	if err != nil {
-		log.Printf("Error injecting router.go file: %v", err)
+		log.Printf("Error injecting %s file: %v", filePath, err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	return nil
+}
+
+func (p *APIApp) injectServiceFiles(ti *shared.TemplateInjector) error {
+	templater := p.Service.templater
+
+	filePath := filepath.Join(internalServicePath, "service.go")
+	err := ti.Inject(filePath, templater.Interface())
+	if err != nil {
+		log.Printf("Error injecting %s file: %v", filePath, err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	filePath = filepath.Join(internalServicePath, "domain", "service.go")
+	err = ti.Inject(filePath, templater.Implementation())
+	if err != nil {
+		log.Printf("Error injecting %s file: %v", filePath, err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	filePath = filepath.Join(internalServicePath, "domain", "foo", "foo.go")
+	err = ti.Inject(filePath, templater.Foo())
+	if err != nil {
+		log.Printf("Error injecting %s file: %v", filePath, err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	filePath = filepath.Join(internalServicePath, "domain", "health", "health.go")
+	err = ti.Inject(filePath, templater.Health())
+	if err != nil {
+		log.Printf("Error injecting %s file: %v", filePath, err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	return nil
+}
+
+func (p *APIApp) injectEntitiesFiles(ti *shared.TemplateInjector) error {
+	templater := p.Entities.templater
+
+	filePath := filepath.Join(internalEntitiesPath, "shared", "timestamps.go")
+	err := ti.Inject(filePath, templater.Timestamps())
+	if err != nil {
+		log.Printf("Error injecting %s file: %v", filePath, err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	filePath = filepath.Join(internalEntitiesPath, "foo", "foo.go")
+	err = ti.Inject(filePath, templater.Foo())
+	if err != nil {
+		log.Printf("Error injecting %s file: %v", filePath, err)
 		cobra.CheckErr(err)
 		return err
 	}
@@ -409,9 +551,16 @@ func (p *APIApp) injectEnvFile(ti *shared.TemplateInjector) error {
 
 	templ := bytes.Join(envBytes, []byte("\n"))
 
-	err := ti.Inject(".env", templ)
+	err := ti.Inject(".env.example", templ)
 	if err != nil {
-		log.Printf("Error injecting .env file: %v", err)
+		log.Printf("Error injecting .env.example file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	err = ti.Inject(".env.local", templ)
+	if err != nil {
+		log.Printf("Error injecting .env.local file: %v", err)
 		cobra.CheckErr(err)
 		return err
 	}

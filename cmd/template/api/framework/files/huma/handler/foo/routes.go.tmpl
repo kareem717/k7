@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"{{ .Name }}/internal/service"
+	"{{ .Name }}/internal/server/middleware"
 
 	"github.com/danielgtaylor/huma/v2"
 	"go.uber.org/zap"
@@ -61,6 +62,7 @@ func RegisterHumaRoutes(
 		Path:        "/foo/{id}",
 		Summary:     "Update a foo",
 		Description: "Update a foo.",
+		Tags:        []string{"Foo"},
 		Security: []map[string][]string{
 			{"bearerAuth": {}},
 		},
@@ -77,6 +79,7 @@ func RegisterHumaRoutes(
 		Path:        "/foo/{id}",
 		Summary:     "Delete a foo",
 		Description: "Delete a foo.",
+		Tags:        []string{"Foo"},
 		Security: []map[string][]string{
 			{"bearerAuth": {}},
 		},

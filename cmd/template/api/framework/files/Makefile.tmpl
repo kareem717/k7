@@ -1,4 +1,5 @@
-# Simple Makefile for a Go project
+#!make
+include .env.local
 
 build:
 	{{if .UnixBased }}@go build -o bin/{{.Name }} main.go{{ else }}@go build -o bin/{{ .Name }}.exe main.go{{ end }}
@@ -19,3 +20,17 @@ test:
 watch:
 	@air -c .air.toml
 
+db-status:
+	@GOOSE_DRIVER=${GOOSE_DRIVER} GOOSE_DBSTRING=${DATABASE_URL} goose -dir=${GOOSE_MIGRATIONS_PATH} status
+
+db-up:
+	@GOOSE_DRIVER=${GOOSE_DRIVER} GOOSE_DBSTRING=${DATABASE_URL} goose -dir=${GOOSE_MIGRATIONS_PATH} up
+
+db-up-one:
+	@GOOSE_DRIVER=${GOOSE_DRIVER} GOOSE_DBSTRING=${DATABASE_URL} goose -dir=${GOOSE_MIGRATIONS_PATH} up-by-one 
+	
+db-down:
+	@GOOSE_DRIVER=${GOOSE_DRIVER} GOOSE_DBSTRING=${DATABASE_URL} goose -dir=${GOOSE_MIGRATIONS_PATH} down
+
+db-reset:
+	@GOOSE_DRIVER=${GOOSE_DRIVER} GOOSE_DBSTRING=${DATABASE_URL} goose -dir=${GOOSE_MIGRATIONS_PATH} reset

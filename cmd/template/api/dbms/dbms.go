@@ -4,17 +4,8 @@ import (
 	_ "embed"
 )
 
-//go:embed files/storage/shared/shared.go.tmpl
-var sharedFileTemplate []byte
-
 //go:embed files/storage/storage.go.tmpl
 var interfaceTemplate []byte
-
-// SharedFileTemplate returns a byte slice that represents
-// the file shared across all storage (DBMS) implementations.
-func SharedFileTemplate() []byte {
-	return sharedFileTemplate
-}
 
 // InterfaceTemplate returns a byte slice that represents
 // the storage (DBMS) interface.
@@ -26,4 +17,6 @@ type Templater interface {
 	Env() []byte
 	Implementation() []byte
 	InitialMigration() []byte
+	Shared() []byte
+	Foo() []byte
 }
