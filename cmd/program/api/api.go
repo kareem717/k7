@@ -100,8 +100,10 @@ type Framework struct {
 }
 
 type DBMS struct {
-	packageName []string
-	templater   DBMSTemplater
+	name             string
+	initialMigration string
+	packageName      []string
+	templater        DBMSTemplater
 }
 
 // A Templater has the methods that help build the files
@@ -160,6 +162,8 @@ func (p *APIApp) createFrameworkMap() {
 
 func (p *APIApp) createDBMSMap() {
 	p.DBMSMap[apiFlags.Postgres] = DBMS{
+		name:             "postgres",
+		initialMigration: "0_foo.sql",
 		//TODO: clean this up
 		packageName: append(append(pgxPostgresDriver, bunPackages...), bunPgDialectPackage...),
 		templater:   dbms.PostgresTemplate{},
@@ -169,7 +173,6 @@ func (p *APIApp) createDBMSMap() {
 // CreateMainFile creates the project folders and files,
 // and writes to them depending on the selected options
 func (p *APIApp) CreateMainFile() error {
-	log.Printf("\n\np: %+v\n\n", p)
 	// check if AbsolutePath exists
 	if _, err := os.Stat(p.AbsolutePath); os.IsNotExist(err) {
 		// create directory
@@ -234,17 +237,24 @@ func (p *APIApp) CreateMainFile() error {
 	}
 
 	// Create the storage folder
-	err = p.CreatePath(internalStoreagePath, projectPath)
+	err = shared.CreatePath(internalStoreagePath, projectPath)
 	if err != nil {
 		log.Printf("Error creating path: %s", internalStoreagePath)
 		cobra.CheckErr(err)
 		return err
 	}
 
-	// Create the DBMS.go file
-	err = p.CreateFileWithInjection(internalStoreagePath, projectPath, "storage.go", "DBMS")
+	injector, err := shared.NewTemplateInjector(projectPath, p)
 	if err != nil {
-		log.Printf("Error injecting DBMS.go file: %v", err)
+		log.Printf("Error creating template injector: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	// Create the DBMS.go file
+	err = p.injectDBMSFiles(injector)
+	if err != nil {
+		log.Printf("Error injecting storage files: %v", err)
 		cobra.CheckErr(err)
 		return err
 	}
@@ -284,34 +294,34 @@ func (p *APIApp) CreateMainFile() error {
 		return err
 	}
 
-	err = p.CreatePath(internalServerPath, projectPath)
+	err = shared.CreatePath(internalServerPath, projectPath)
 	if err != nil {
 		log.Printf("Error creating path: %s", internalServerPath)
 		cobra.CheckErr(err)
 		return err
 	}
 
-	err = p.CreateFileWithInjection(internalServerPath, projectPath, "routes.go", "routes")
+	err = p.CreateFileWithInjection(internalServerPath, projectPath, "routes.go", routesMethod)
 	if err != nil {
 		log.Printf("Error injecting routes.go file: %v", err)
 		cobra.CheckErr(err)
 		return err
 	}
 
-	err = p.CreateFileWithInjection(internalServerPath, projectPath, "routes_test.go", "tests")
+	err = p.CreateFileWithInjection(internalServerPath, projectPath, "routes_test.go", testsMethod)
 	if err != nil {
 		cobra.CheckErr(err)
 		return err
 	}
 
-	err = p.CreateFileWithInjection(internalServerPath, projectPath, "server.go", "server")
+	err = p.CreateFileWithInjection(internalServerPath, projectPath, "server.go", serverMethod)
 	if err != nil {
 		log.Printf("Error injecting server.go file: %v", err)
 		cobra.CheckErr(err)
 		return err
 	}
 
-	err = p.CreateFileWithInjection(root, projectPath, ".env", "env")
+	err = p.CreateFileWithInjection(root, projectPath, ".env", envMethod)
 	if err != nil {
 		log.Printf("Error injecting .env file: %v", err)
 		cobra.CheckErr(err)
@@ -403,23 +413,61 @@ func (p *APIApp) CreateMainFile() error {
 	return nil
 }
 
-// CreatePath creates the given directory in the projectPath
-func (p *APIApp) CreatePath(pathToCreate string, projectPath string) error {
-	path := filepath.Join(projectPath, pathToCreate)
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		err := os.MkdirAll(path, 0o751)
-		if err != nil {
-			log.Printf("Error creating directory %v\n", err)
-			return err
-		}
+func (p *APIApp) injectDBMSFiles(ti *shared.TemplateInjector) error {
+	// Create implementation agnostic helper file
+	err := ti.Inject(filepath.Join(internalStoreagePath, "shared/shared.go"), dbms.SharedFileTemplate())
+	if err != nil {
+		log.Printf("Error injecting shared/shared.go file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	// Create the storage.go interface file
+	err = ti.Inject(filepath.Join(internalStoreagePath, "storage.go"), dbms.InterfaceTemplate())
+	if err != nil {
+		log.Printf("Error injecting migrations/0_foo.sql file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	dbmsConfig := p.DBMSMap[p.DBMS]
+
+	// Create initial migration file
+	initMigrationFile := fmt.Sprintf("%s/migrations/%s", dbmsConfig.name, dbmsConfig.initialMigration)
+	err = ti.Inject(filepath.Join(internalStoreagePath, initMigrationFile), dbmsConfig.templater.InitialMigration())
+	if err != nil {
+		log.Printf("Error injecting migrations/0_foo.sql file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	// Create DBMS specific implementation file
+	implementationFile := fmt.Sprintf("%s/storage.go", dbmsConfig.name)
+	err = ti.Inject(filepath.Join(internalStoreagePath, implementationFile), dbmsConfig.templater.Implementation())
+	if err != nil {
+		log.Printf("Error injecting migrations/0_foo.sql file: %v", err)
+		cobra.CheckErr(err)
+		return err
 	}
 
 	return nil
 }
 
+type fileInjectionMethod string
+
+const (
+	mainMethod             fileInjectionMethod = "main"
+	serverMethod           fileInjectionMethod = "server"
+	routesMethod           fileInjectionMethod = "routes"
+	DBMSMethod             fileInjectionMethod = "dbms"
+	integrationTestsMethod fileInjectionMethod = "integration-tests"
+	testsMethod            fileInjectionMethod = "tests"
+	envMethod              fileInjectionMethod = "env"
+)
+
 // CreateFileWithInjection creates the given file at the
 // project path, and injects the appropriate template
-func (p *APIApp) CreateFileWithInjection(pathToCreate string, projectPath string, fileName string, methodName string) error {
+func (p *APIApp) CreateFileWithInjection(pathToCreate string, projectPath string, fileName string, method fileInjectionMethod) error {
 	createdFile, err := os.Create(filepath.Join(projectPath, pathToCreate, fileName))
 	if err != nil {
 		return err
@@ -427,32 +475,29 @@ func (p *APIApp) CreateFileWithInjection(pathToCreate string, projectPath string
 
 	defer createdFile.Close()
 
-	switch methodName {
-	case "main":
+	switch method {
+	case mainMethod:
 		createdTemplate := template.Must(template.New(fileName).Parse(string(p.FrameworkMap[p.Framework].templater.Main())))
 		err = createdTemplate.Execute(createdFile, p)
-	case "server":
+	case serverMethod:
 		createdTemplate := template.Must(template.New(fileName).Parse(string(p.FrameworkMap[p.Framework].templater.Server())))
 		err = createdTemplate.Execute(createdFile, p)
-	case "routes":
+	case routesMethod:
 		routeFileBytes := p.FrameworkMap[p.Framework].templater.Routes()
 		createdTemplate := template.Must(template.New(fileName).Parse(string(routeFileBytes)))
 		err = createdTemplate.Execute(createdFile, p)
-	case "DBMS":
-		log.Printf("createdTemplate: %v", "there")
-		log.Printf("templater: %v", p.DBMSMap[p.DBMS].templater)
-		log.Printf("driver: %v", p.DBMS)
+	case DBMSMethod:
+		//todo: create interface, migration files
 
 		createdTemplate := template.Must(template.New(fileName).Parse(string(p.DBMSMap[p.DBMS].templater.Implementation())))
-		log.Printf("createdTemplate: %v", "here")
 		err = createdTemplate.Execute(createdFile, p)
-	case "integration-tests":
+	case integrationTestsMethod:
 		createdTemplate := template.Must(template.New(fileName).Parse(string(p.DBMSMap[p.DBMS].templater.InitialMigration())))
 		err = createdTemplate.Execute(createdFile, p)
-	case "tests":
+	case testsMethod:
 		createdTemplate := template.Must(template.New(fileName).Parse(string(p.FrameworkMap[p.Framework].templater.TestHandler())))
 		err = createdTemplate.Execute(createdFile, p)
-	case "env":
+	case envMethod:
 		if p.DBMS != "none" {
 
 			envBytes := [][]byte{

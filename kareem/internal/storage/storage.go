@@ -3,8 +3,8 @@ package storage
 import (
 	"context"
 
-	"{{ .Name }}/internal/entities/foo"
-	"{{ .Name }}/internal/storage/postgres/shared"
+	"kareem/internal/entities/foo"
+	"kareem/internal/storage/postgres/shared"
 )
 
 type FooRepository interface {

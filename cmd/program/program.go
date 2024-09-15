@@ -69,16 +69,15 @@ func (p *Project) CreateAPIApp(name string, opts ...api.OptFunc) error {
 		// Retrieve the struct, modify it, and reassign it back to the map
 		step.Field = selection.Choice
 		steps.Steps[name] = step
-		log.Printf("step.%s: %s", name, step.Field) // Logs the current step's field value
 		shared.Exit(tprogram, &shouldExit)
 	}
-
-	log.Printf("steps: %+v", steps.Steps) // Logs the final state of all steps
 
 	app, err := api.NewAPIApp(apiName.Output, appOpts, opts...)
 	if err != nil {
 		return fmt.Errorf("error creating API app: %w", err)
 	}
 
-	return app.CreateMainFile()
+	return shared.RunWithSpinner(func() error {
+		return app.CreateMainFile()
+	})
 }

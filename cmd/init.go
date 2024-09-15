@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -19,9 +18,7 @@ import (
 	"github.com/kareem717/k7/cmd/program/shared"
 	stepsPkg "github.com/kareem717/k7/cmd/steps"
 	"github.com/kareem717/k7/cmd/ui/multiinput"
-	"github.com/kareem717/k7/cmd/ui/spinner"
 	"github.com/kareem717/k7/cmd/ui/textinput"
-	"github.com/kareem717/k7/cmd/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +37,7 @@ const logo = `
 var (
 	logoStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#ED6605")).Bold(true)
 	tipMsgStyle    = lipgloss.NewStyle().PaddingLeft(1).Foreground(lipgloss.Color("190")).Italic(true)
-	endingMsgStyle = lipgloss.NewStyle().PaddingLeft(1).Foreground(lipgloss.Color("170")).Bold(true)
+	endingMsgStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("170")).Bold(true)
 )
 
 func init() {
@@ -76,7 +73,7 @@ var initCmd = &cobra.Command{
 		var shouldExit bool
 
 		// CREATE APP TYPE STEP
-		isInteractive := true
+		// isInteractive := true
 		step := steps.Steps[stepsPkg.AppType.String()]
 		tprogram = tea.NewProgram(multiinput.InitialModelMulti(step.Options, options.AppType, step.Headers, &shouldExit))
 		if _, err := tprogram.Run(); err != nil {
@@ -97,7 +94,6 @@ var initCmd = &cobra.Command{
 
 		switch project.AppType {
 		case flags.AppAPI:
-			isInteractive = true
 			project.CreateAPIApp(
 				project.AbsolutePath,
 				api.WithAbsolutePath(project.AbsolutePath),
@@ -106,101 +102,9 @@ var initCmd = &cobra.Command{
 				api.WithGit(flags.Skip),
 				api.WithUnixBased(project.UnixBased),
 			)
-
-			// name := options.APIName.Output
-			// if err != nil {
-			// 	log.Fatal("failed to set the name flag value", err)
-			// }
-
-			// // CREATE APP TYPE STEP
-			// for name, step := range steps.Steps {
-			// 	selection := &multiinput.Selection{}
-			// 	tprogram = tea.NewProgram(multiinput.InitialModelMulti(step.Options, selection, step.Headers, project))
-			// 	if _, err := tprogram.Run(); err != nil {
-			// 		cobra.CheckErr(textinput.CreateErrorInputModel(err).Err())
-			// 	}
-
-			// 	// Retrieve the struct, modify it, and reassign it back to the map
-			// 	step.Field = selection.Choice
-			// 	steps.Steps[name] = step
-			// 	log.Printf("step.%s: %s", name, step.Field) // Logs the current step's field value
-			// 	project.ExitCLI(tprogram)
-			// }
-
-			// log.Printf("steps: %+v", steps.Steps) // Logs the final state of all steps
-
-			// apiApp := project.CreateAPIApp(
-			// 	name,
-			// 	project.AbsolutePath,
-			// 	apiFlags.Framework(steps.Steps[stepsPkg.APIFramework.String()].Field),
-			// 	apiFlags.DBMS(steps.Steps[stepsPkg.DBMS.String()].Field),
-			// 	flags.Git(steps.Steps[stepsPkg.GitRepo.String()].Field),
-			// 	project.UnixBased,
-			// )
-
-			// log.Printf("apiApp: %+v", apiApp)
-
-			// err = apiApp.CreateMainFile()
-		}
-
-		spinner := tea.NewProgram(spinner.InitialModelNew())
-
-		// add synchronization to wait for spinner to finish
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if _, err := spinner.Run(); err != nil {
-				cobra.CheckErr(err)
-			}
-		}()
-
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Println("The program encountered an unexpected issue and had to exit. The error was:", r)
-				fmt.Println("If you continue to experience this issue, please post a message on our GitHub page or join our Discord server for support.")
-				if releaseErr := spinner.ReleaseTerminal(); releaseErr != nil {
-					log.Printf("Problem releasing terminal: %v", releaseErr)
-				}
-			}
-		}()
-
-		if err != nil {
-			if releaseErr := spinner.ReleaseTerminal(); releaseErr != nil {
-				log.Printf("Problem releasing terminal: %v", releaseErr)
-			}
-			log.Printf("Problem creating files for project. %v", err)
-			cobra.CheckErr(textinput.CreateErrorInputModel(err).Err())
 		}
 
 		fmt.Println(endingMsgStyle.Render("\nNext steps:"))
-		// TODO: change this to the actual project name
-		fmt.Println(endingMsgStyle.Render(fmt.Sprintf("• cd into the newly created project with: `cd %s`\n")))
-
-		if isInteractive {
-			nonInteractiveCommand := utils.NonInteractiveCommand(cmd.Use, cmd.Flags())
-			fmt.Println(tipMsgStyle.Render("Tip: Repeat the equivalent Blueprint with the following non-interactive command:"))
-			fmt.Println(tipMsgStyle.Italic(false).Render(fmt.Sprintf("• %s\n", nonInteractiveCommand)))
-		}
-		err = spinner.ReleaseTerminal()
-		if err != nil {
-			log.Printf("Could not release terminal: %v", err)
-			cobra.CheckErr(err)
-		}
+		fmt.Println(endingMsgStyle.Render(fmt.Sprintf("• cd into the newly created project with: `cd %s`\n", project.AbsolutePath)))
 	},
-}
-
-// doesDirectoryExistAndIsNotEmpty checks if the directory exists and is not empty
-func doesDirectoryExistAndIsNotEmpty(name string) bool {
-	if _, err := os.Stat(name); err == nil {
-		dirEntries, err := os.ReadDir(name)
-		if err != nil {
-			log.Printf("could not read directory: %v", err)
-			cobra.CheckErr(textinput.CreateErrorInputModel(err))
-		}
-		if len(dirEntries) > 0 {
-			return true
-		}
-	}
-	return false
 }
