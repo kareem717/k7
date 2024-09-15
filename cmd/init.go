@@ -14,7 +14,6 @@ import (
 	"github.com/kareem717/k7/cmd/flags"
 	apiFlags "github.com/kareem717/k7/cmd/flags/api"
 	"github.com/kareem717/k7/cmd/program"
-	"github.com/kareem717/k7/cmd/program/api"
 	"github.com/kareem717/k7/cmd/program/shared"
 	stepsPkg "github.com/kareem717/k7/cmd/steps"
 	"github.com/kareem717/k7/cmd/ui/multiinput"
@@ -96,11 +95,11 @@ var initCmd = &cobra.Command{
 		case flags.AppAPI:
 			project.CreateAPIApp(
 				project.AbsolutePath,
-				api.WithAbsolutePath(project.AbsolutePath),
-				api.WithFramework(apiFlags.Huma),
-				api.WithDBMS(apiFlags.Postgres),
-				api.WithGit(flags.Skip),
-				api.WithUnixBased(project.UnixBased),
+				shared.WithAbsolutePath(project.AbsolutePath),
+				shared.WithFramework(apiFlags.Huma),
+				shared.WithDBMS(apiFlags.Postgres),
+				shared.WithGit(flags.Skip),
+				shared.WithUnixBased(project.UnixBased),
 			)
 		}
 

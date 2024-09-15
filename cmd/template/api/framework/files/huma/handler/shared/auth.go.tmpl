@@ -1,0 +1,19 @@
+package shared
+
+import (
+	"context"
+
+	"{{ .Name }}/internal/entities/account"
+)
+
+const (
+	FooBearerTokenKey    = "fbt"
+)
+
+func GetFooBearerToken(ctx context.Context) string {
+	if ctxValue, ok := ctx.Value(FooBearerTokenKey).(string); ok {
+		return ctxValue
+	}
+
+	return ""
+}

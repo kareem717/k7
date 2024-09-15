@@ -27,9 +27,9 @@ type Project struct {
 }
 
 // CreateAPIApp creates a new API app
-func (p *Project) CreateAPIApp(name string, opts ...api.OptFunc) error {
+func (p *Project) CreateAPIApp(name string, opts ...shared.OptFunc) error {
 	steps := steps.APISteps()
-	appOpts := api.Options{
+	appOpts := shared.Options{
 		AbsolutePath: ".",
 		Framework:    apiFlags.Huma,
 		DBMS:         apiFlags.Postgres,

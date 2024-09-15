@@ -19,62 +19,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type Options struct {
-	Framework    apiFlags.Framework
-	DBMS         apiFlags.DBMS
-	Git          flags.Git
-	UnixBased    bool
-	AbsolutePath string
-}
-
-type OptFunc func(app *Options) error
-
-func WithFramework(f apiFlags.Framework) OptFunc {
-	return func(app *Options) error {
-		app.Framework = f
-		return nil
-	}
-}
-
-func WithDBMS(d apiFlags.DBMS) OptFunc {
-	return func(app *Options) error {
-		app.DBMS = d
-		return nil
-	}
-}
-
-func WithGit(g flags.Git) OptFunc {
-	return func(app *Options) error {
-		app.Git = g
-		return nil
-	}
-}
-
-// WithUnixBased sets the UnixBased flag to true
-func WithUnixBased(b bool) OptFunc {
-	return func(app *Options) error {
-		app.UnixBased = b
-		return nil
-	}
-}
-
-func WithAbsolutePath(path string) OptFunc {
-	return func(app *Options) error {
-		app.AbsolutePath = path
-		return nil
-	}
-}
-
 // A Project contains the data for the project folder
 // being created, and methods that help with that process
 type APIApp struct {
 	Name         string
 	FrameworkMap map[apiFlags.Framework]Framework
 	DBMSMap      map[apiFlags.DBMS]DBMS
-	Options
+	shared.Options
 }
 
-func NewAPIApp(name string, opts Options, optFuncs ...OptFunc) (*APIApp, error) {
+func NewAPIApp(name string, opts shared.Options, optFuncs ...shared.OptFunc) (*APIApp, error) {
 	app := APIApp{
 		Name:         name,
 		Options:      opts,
@@ -95,29 +49,14 @@ func NewAPIApp(name string, opts Options, optFuncs ...OptFunc) (*APIApp, error) 
 // given Framework
 type Framework struct {
 	packageName []string
-	templater   Templater
+	templater   framework.Templater
 }
 
 type DBMS struct {
 	name             string
 	initialMigration string
 	packageName      []string
-	templater        DBMSTemplater
-}
-
-// A Templater has the methods that help build the files
-// in the Project folder, and is specific to a Framework
-type Templater interface {
-	Main() []byte
-	Server() []byte
-	Routes() []byte
-	TestHandler() []byte
-}
-
-type DBMSTemplater interface {
-	Env() []byte
-	Implementation() []byte
-	InitialMigration() []byte
+	templater        dbms.Templater
 }
 
 var (
@@ -394,7 +333,7 @@ func (p *APIApp) injectWorkspaceFiles(ti *shared.TemplateInjector) error {
 func (p *APIApp) injectFrameworkFiles(ti *shared.TemplateInjector) error {
 	frameworkConfig := p.FrameworkMap[p.Framework]
 
-	err := ti.Inject(filepath.Join("main.go"), frameworkConfig.templater.Main())
+	err := ti.Inject("main.go", frameworkConfig.templater.Main())
 	if err != nil {
 		log.Printf("Error injecting main.go file: %v", err)
 		cobra.CheckErr(err)
@@ -408,7 +347,51 @@ func (p *APIApp) injectFrameworkFiles(ti *shared.TemplateInjector) error {
 		return err
 	}
 
-	err = ti.Inject(filepath.Join(internalServerPath, "router.go"), frameworkConfig.templater.Routes())
+	err = ti.Inject(filepath.Join(internalServerPath, "router.go"), frameworkConfig.templater.Router())
+	if err != nil {
+		log.Printf("Error injecting router.go file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	err = ti.Inject(filepath.Join(internalServerPath, "middleware/auth.go"), frameworkConfig.templater.Middleware().Auth)
+	if err != nil {
+		log.Printf("Error injecting router.go file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	err = ti.Inject(filepath.Join(internalServerPath, "middleware/shared.go"), frameworkConfig.templater.Middleware().Shared)
+	if err != nil {
+		log.Printf("Error injecting router.go file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	for _, handler := range frameworkConfig.templater.Handlers().Handlers {
+		err = ti.Inject(filepath.Join(internalServerPath, "handlers", handler.Name, "handler.go"), handler.Handler)
+		if err != nil {
+			log.Printf("Error injecting router.go file: %v", err)
+			cobra.CheckErr(err)
+			return err
+		}
+
+		err = ti.Inject(filepath.Join(internalServerPath, "handlers", handler.Name, "routes.go"), handler.Routes)
+		if err != nil {
+			log.Printf("Error injecting router.go file: %v", err)
+			cobra.CheckErr(err)
+			return err
+		}
+	}
+
+	err = ti.Inject(filepath.Join(internalServerPath, "handlers/shared/auth.go"), frameworkConfig.templater.Handlers().Shared.Auth)
+	if err != nil {
+		log.Printf("Error injecting router.go file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	err = ti.Inject(filepath.Join(internalServerPath, "handlers/shared/schemas.go"), frameworkConfig.templater.Handlers().Shared.Schemas)
 	if err != nil {
 		log.Printf("Error injecting router.go file: %v", err)
 		cobra.CheckErr(err)

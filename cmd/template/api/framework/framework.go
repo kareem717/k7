@@ -37,3 +37,34 @@ func AirTomlTemplate() []byte {
 func ReadmeTemplate() []byte {
 	return readmeTemplate
 }
+
+type Handler struct {
+	Name    string
+	Handler []byte
+	Routes  []byte
+}
+
+type HandlerHelper struct {
+	Auth    []byte
+	Schemas []byte
+}
+
+type Handlers struct {
+	Handlers []Handler
+	Shared   HandlerHelper
+}
+
+type Middleware struct {
+	Auth   []byte
+	Shared []byte
+}
+
+// A Templater has the methods that help build the files
+// in the Project folder, and is specific to a Framework
+type Templater interface {
+	Main() []byte
+	Server() []byte
+	Router() []byte
+	Handlers() Handlers
+	Middleware() Middleware
+}

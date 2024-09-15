@@ -23,7 +23,7 @@ func InterfaceTemplate() []byte {
 }
 
 type Templater interface {
-	Implementation() []byte
 	Env() []byte
+	Implementation() []byte
 	InitialMigration() []byte
 }
