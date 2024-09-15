@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/kareem717/k7/cmd/program"
 )
 
 var (
@@ -54,7 +53,7 @@ func sanitizeInput(input string) error {
 
 // InitialTextInputModel initializes a textinput step
 // with the given data
-func InitialTextInputModel(output *Output, header string, program *program.Project) model {
+func InitialTextInputModel(output *Output, header string, exit *bool) model {
 	ti := textinput.New()
 	ti.Focus()
 	ti.CharLimit = 156
@@ -66,7 +65,8 @@ func InitialTextInputModel(output *Output, header string, program *program.Proje
 		err:       nil,
 		output:    output,
 		header:    titleStyle.Render(header),
-		exit:      &program.Exit,
+		// TODO: handle program exits better
+		exit:      exit,
 	}
 }
 

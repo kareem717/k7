@@ -3,7 +3,6 @@ package multiinput
 import (
 	"fmt"
 
-	"github.com/kareem717/k7/cmd/program"
 	"github.com/kareem717/k7/cmd/steps"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -47,13 +46,14 @@ func (m model) Init() tea.Cmd {
 
 // InitialModelMulti initializes a multiinput step with
 // the given data
-func InitialModelMulti(choices []steps.Item, selection *Selection, header string, program *program.Project) model {
+func InitialModelMulti(choices []steps.Item, selection *Selection, header string, exit *bool) model {
 	return model{
 		choices:  choices,
 		selected: make(map[int]struct{}),
 		choice:   selection,
 		header:   titleStyle.Render(header),
-		exit:     &program.Exit,
+		// TODO: handle program exits better
+		exit: exit,
 	}
 }
 

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"text/template"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kareem717/k7/cmd/flags"
 	apiFlags "github.com/kareem717/k7/cmd/flags/api"
 	tpl "github.com/kareem717/k7/cmd/template/api"
@@ -21,38 +20,76 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type Options struct {
+	Framework    apiFlags.Framework
+	DBMS         apiFlags.DBMS
+	Git          flags.Git
+	UnixBased    bool
+	AbsolutePath string
+}
+
+type OptFunc func(app *Options) error
+
+func WithFramework(f apiFlags.Framework) OptFunc {
+	return func(app *Options) error {
+		app.Framework = f
+		return nil
+	}
+}
+
+func WithDBMS(d apiFlags.DBMS) OptFunc {
+	return func(app *Options) error {
+		app.DBMS = d
+		return nil
+	}
+}
+
+func WithGit(g flags.Git) OptFunc {
+	return func(app *Options) error {
+		app.Git = g
+		return nil
+	}
+}
+
+// WithUnixBased sets the UnixBased flag to true
+func WithUnixBased(b bool) OptFunc {
+	return func(app *Options) error {
+		app.UnixBased = b
+		return nil
+	}
+}
+
+func WithAbsolutePath(path string) OptFunc {
+	return func(app *Options) error {
+		app.AbsolutePath = path
+		return nil
+	}
+}
+
 // A Project contains the data for the project folder
 // being created, and methods that help with that process
 type APIApp struct {
-	APIName      string
-	Exit         bool
-	AbsolutePath string
-	Framework    apiFlags.Framework
-	DBMS         apiFlags.DBMS
+	Name         string
 	FrameworkMap map[apiFlags.Framework]Framework
 	DBMSMap      map[apiFlags.DBMS]DBMS
-	GitOptions   flags.Git
-	UnixBased    bool
+	Options
 }
 
-func NewAPIApp(
-	name string,
-	absolutePath string,
-	framework apiFlags.Framework,
-	dbms apiFlags.DBMS,
-	gitOptions flags.Git,
-	unixBased bool,
-) APIApp {
-	return APIApp{
-		APIName:      name,
-		AbsolutePath: absolutePath,
-		Framework:    framework,
+func NewAPIApp(name string, opts Options, optFuncs ...OptFunc) (*APIApp, error) {
+	app := APIApp{
+		Name:         name,
+		Options:      opts,
 		FrameworkMap: make(map[apiFlags.Framework]Framework),
-		DBMS:         dbms,
 		DBMSMap:      make(map[apiFlags.DBMS]DBMS),
-		GitOptions:   gitOptions,
-		UnixBased:    unixBased,
 	}
+
+	for _, opt := range optFuncs {
+		if err := opt(&app.Options); err != nil {
+			return nil, fmt.Errorf("error applying option: %w", err)
+		}
+	}
+
+	return &app, nil
 }
 
 // A Framework contains the name and templater for a
@@ -77,9 +114,9 @@ type Templater interface {
 }
 
 type DBMSTemplater interface {
-	Service() []byte
 	Env() []byte
-	Tests() []byte
+	Implementation() []byte
+	InitialMigration() []byte
 }
 
 var (
@@ -112,14 +149,8 @@ func (p *APIApp) SetUnixBased() {
 	}
 }
 
-// ExitCLI checks if the Project has been exited, and closes
-// out of the CLI if it has
-func (p *APIApp) ExitCLI(prog *tea.Program) {
-	if p.Exit {
-		shared.Exit(prog)
-	}
-}
-
+// createFrameWorkMap adds the current supported
+// Frameworks into a Project's FrameworkMap
 func (p *APIApp) createFrameworkMap() {
 	p.FrameworkMap[apiFlags.Huma] = Framework{
 		packageName: humaPackage,
@@ -138,6 +169,7 @@ func (p *APIApp) createDBMSMap() {
 // CreateMainFile creates the project folders and files,
 // and writes to them depending on the selected options
 func (p *APIApp) CreateMainFile() error {
+	log.Printf("\n\np: %+v\n\n", p)
 	// check if AbsolutePath exists
 	if _, err := os.Stat(p.AbsolutePath); os.IsNotExist(err) {
 		// create directory
@@ -153,16 +185,16 @@ func (p *APIApp) CreateMainFile() error {
 		cobra.CheckErr(err)
 	}
 
-	if !emailSet && p.GitOptions.String() != flags.Skip {
+	if !emailSet && p.Git.String() != flags.Skip {
 		fmt.Println("user.email is not set in git config.")
 		fmt.Println("Please set up git config before trying again.")
 		panic("\nGIT CONFIG ISSUE: user.email is not set in git config.\n")
 	}
 
-	p.APIName = strings.TrimSpace(p.APIName)
+	p.Name = strings.TrimSpace(p.Name)
 
 	// Create a new directory with the project name
-	projectPath := filepath.Join(p.AbsolutePath, p.APIName)
+	projectPath := filepath.Join(p.AbsolutePath, p.Name)
 	if _, err := os.Stat(projectPath); os.IsNotExist(err) {
 		err := os.MkdirAll(projectPath, 0o751)
 		if err != nil {
@@ -181,7 +213,7 @@ func (p *APIApp) CreateMainFile() error {
 	p.createDBMSMap()
 
 	// Create go.mod
-	err = utils.InitGoMod(p.APIName, projectPath)
+	err = utils.InitGoMod(p.Name, projectPath)
 	if err != nil {
 		log.Printf("Could not initialize go.mod in new project %v\n", err)
 		cobra.CheckErr(err)
@@ -210,7 +242,7 @@ func (p *APIApp) CreateMainFile() error {
 	}
 
 	// Create the DBMS.go file
-	err = p.CreateFileWithInjection(internalStoreagePath, projectPath, "DBMS.go", "DBMS")
+	err = p.CreateFileWithInjection(internalStoreagePath, projectPath, "storage.go", "DBMS")
 	if err != nil {
 		log.Printf("Error injecting DBMS.go file: %v", err)
 		cobra.CheckErr(err)
@@ -335,7 +367,7 @@ func (p *APIApp) CreateMainFile() error {
 		cobra.CheckErr(err)
 	}
 
-	if p.GitOptions != flags.Skip {
+	if p.Git.String() != flags.Skip {
 		if !nameSet {
 			fmt.Println("user.name is not set in git config.")
 			fmt.Println("Please set up git config before trying again.")
@@ -357,7 +389,7 @@ func (p *APIApp) CreateMainFile() error {
 			return err
 		}
 
-		if p.GitOptions == flags.Commit {
+		if p.Git.String() == flags.Commit {
 			// Git commit files
 			err = utils.ExecuteCmd("git", []string{"commit", "-m", "Initial commit"}, projectPath)
 			if err != nil {
@@ -411,11 +443,11 @@ func (p *APIApp) CreateFileWithInjection(pathToCreate string, projectPath string
 		log.Printf("templater: %v", p.DBMSMap[p.DBMS].templater)
 		log.Printf("driver: %v", p.DBMS)
 
-		createdTemplate := template.Must(template.New(fileName).Parse(string(p.DBMSMap[p.DBMS].templater.Service())))
+		createdTemplate := template.Must(template.New(fileName).Parse(string(p.DBMSMap[p.DBMS].templater.Implementation())))
 		log.Printf("createdTemplate: %v", "here")
 		err = createdTemplate.Execute(createdFile, p)
 	case "integration-tests":
-		createdTemplate := template.Must(template.New(fileName).Parse(string(p.DBMSMap[p.DBMS].templater.Tests())))
+		createdTemplate := template.Must(template.New(fileName).Parse(string(p.DBMSMap[p.DBMS].templater.InitialMigration())))
 		err = createdTemplate.Execute(createdFile, p)
 	case "tests":
 		createdTemplate := template.Must(template.New(fileName).Parse(string(p.FrameworkMap[p.Framework].templater.TestHandler())))

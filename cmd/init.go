@@ -15,6 +15,8 @@ import (
 	"github.com/kareem717/k7/cmd/flags"
 	apiFlags "github.com/kareem717/k7/cmd/flags/api"
 	"github.com/kareem717/k7/cmd/program"
+	"github.com/kareem717/k7/cmd/program/api"
+	"github.com/kareem717/k7/cmd/program/shared"
 	stepsPkg "github.com/kareem717/k7/cmd/steps"
 	"github.com/kareem717/k7/cmd/ui/multiinput"
 	"github.com/kareem717/k7/cmd/ui/spinner"
@@ -65,24 +67,26 @@ var initCmd = &cobra.Command{
 		}
 
 		project := &program.Project{
-			AppTypes: []flags.App{},
+			AppType: flags.AppAPI,
 		}
 
 		steps := stepsPkg.InitSteps()
 		fmt.Printf("%s\n", logoStyle.Render(logo))
 
+		var shouldExit bool
+
 		// CREATE APP TYPE STEP
 		isInteractive := true
 		step := steps.Steps[stepsPkg.AppType.String()]
-		tprogram = tea.NewProgram(multiinput.InitialModelMulti(step.Options, options.AppType, step.Headers, project))
+		tprogram = tea.NewProgram(multiinput.InitialModelMulti(step.Options, options.AppType, step.Headers, &shouldExit))
 		if _, err := tprogram.Run(); err != nil {
 			cobra.CheckErr(textinput.CreateErrorInputModel(err).Err())
 		}
-		project.ExitCLI(tprogram)
+		shared.Exit(tprogram, &shouldExit)
 
 		// this type casting is always safe since the user interface can
 		// only pass strings that can be cast to a flags.Framework instance
-		project.AppTypes = []flags.App{flags.App(strings.ToLower(options.AppType.Choice))}
+		project.AppType = flags.App(strings.ToLower(options.AppType.Choice))
 
 		currentWorkingDir, err := os.Getwd()
 		if err != nil {
@@ -91,60 +95,52 @@ var initCmd = &cobra.Command{
 		}
 		project.AbsolutePath = currentWorkingDir
 
-		// This calls the templates
-		for _, appType := range project.AppTypes {
-			log.Printf("appType: %v", appType)
-			switch appType {
-			case flags.AppAPI:
-				steps := stepsPkg.APISteps()
-				isInteractive = true
+		switch project.AppType {
+		case flags.AppAPI:
+			isInteractive = true
+			project.CreateAPIApp(
+				project.AbsolutePath,
+				api.WithAbsolutePath(project.AbsolutePath),
+				api.WithFramework(apiFlags.Huma),
+				api.WithDBMS(apiFlags.Postgres),
+				api.WithGit(flags.Skip),
+				api.WithUnixBased(project.UnixBased),
+			)
 
-				tprogram := tea.NewProgram(textinput.InitialTextInputModel(options.APIName, "What is the name of your project?", project))
-				if _, err := tprogram.Run(); err != nil {
-					log.Printf("Name of project contains an error: %v", err)
-					cobra.CheckErr(textinput.CreateErrorInputModel(err).Err())
-				}
-				if doesDirectoryExistAndIsNotEmpty(options.APIName.Output) {
-					err = fmt.Errorf("directory '%s' already exists and is not empty. Please choose a different name", options.APIName.Output)
-					cobra.CheckErr(textinput.CreateErrorInputModel(err).Err())
-				}
-				project.ExitCLI(tprogram)
+			// name := options.APIName.Output
+			// if err != nil {
+			// 	log.Fatal("failed to set the name flag value", err)
+			// }
 
-				name := options.APIName.Output
-				if err != nil {
-					log.Fatal("failed to set the name flag value", err)
-				}
+			// // CREATE APP TYPE STEP
+			// for name, step := range steps.Steps {
+			// 	selection := &multiinput.Selection{}
+			// 	tprogram = tea.NewProgram(multiinput.InitialModelMulti(step.Options, selection, step.Headers, project))
+			// 	if _, err := tprogram.Run(); err != nil {
+			// 		cobra.CheckErr(textinput.CreateErrorInputModel(err).Err())
+			// 	}
 
-				// CREATE APP TYPE STEP
-				for name, step := range steps.Steps {
-					selection := &multiinput.Selection{}
-					tprogram = tea.NewProgram(multiinput.InitialModelMulti(step.Options, selection, step.Headers, project))
-					if _, err := tprogram.Run(); err != nil {
-						cobra.CheckErr(textinput.CreateErrorInputModel(err).Err())
-					}
+			// 	// Retrieve the struct, modify it, and reassign it back to the map
+			// 	step.Field = selection.Choice
+			// 	steps.Steps[name] = step
+			// 	log.Printf("step.%s: %s", name, step.Field) // Logs the current step's field value
+			// 	project.ExitCLI(tprogram)
+			// }
 
-					// Retrieve the struct, modify it, and reassign it back to the map
-					step.Field = selection.Choice
-					steps.Steps[name] = step
-					log.Printf("step.%s: %s", name, step.Field) // Logs the current step's field value
-					project.ExitCLI(tprogram)
-				}
+			// log.Printf("steps: %+v", steps.Steps) // Logs the final state of all steps
 
-				log.Printf("steps: %+v", steps.Steps) // Logs the final state of all steps
+			// apiApp := project.CreateAPIApp(
+			// 	name,
+			// 	project.AbsolutePath,
+			// 	apiFlags.Framework(steps.Steps[stepsPkg.APIFramework.String()].Field),
+			// 	apiFlags.DBMS(steps.Steps[stepsPkg.DBMS.String()].Field),
+			// 	flags.Git(steps.Steps[stepsPkg.GitRepo.String()].Field),
+			// 	project.UnixBased,
+			// )
 
-				apiApp := project.CreateAPIApp(
-					name,
-					project.AbsolutePath,
-					apiFlags.Framework(steps.Steps[stepsPkg.APIFramework.String()].Field),
-					apiFlags.DBMS(steps.Steps[stepsPkg.DBMS.String()].Field),
-					flags.Git(steps.Steps[stepsPkg.GitRepo.String()].Field),
-					project.UnixBased,
-				)
+			// log.Printf("apiApp: %+v", apiApp)
 
-				log.Printf("apiApp: %+v", apiApp)
-
-				err = apiApp.CreateMainFile()
-			}
+			// err = apiApp.CreateMainFile()
 		}
 
 		spinner := tea.NewProgram(spinner.InitialModelNew())
@@ -179,7 +175,7 @@ var initCmd = &cobra.Command{
 
 		fmt.Println(endingMsgStyle.Render("\nNext steps:"))
 		// TODO: change this to the actual project name
-		fmt.Println(endingMsgStyle.Render(fmt.Sprintf("• cd into the newly created project with: `cd %s`\n", "idk")))
+		fmt.Println(endingMsgStyle.Render(fmt.Sprintf("• cd into the newly created project with: `cd %s`\n")))
 
 		if isInteractive {
 			nonInteractiveCommand := utils.NonInteractiveCommand(cmd.Use, cmd.Flags())

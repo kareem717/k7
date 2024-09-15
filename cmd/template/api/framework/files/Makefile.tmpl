@@ -1,7 +1,7 @@
 # Simple Makefile for a Go project
 
 build:
-	{{if .UnixBased }}@go build -o bin/{{.APIName }} main.go{{ else }}@go build -o bin/{{ .APIName }}.exe main.go{{ end }}
+	{{if .UnixBased }}@go build -o bin/{{.Name }} main.go{{ else }}@go build -o bin/{{ .Name }}.exe main.go{{ end }}
 
 run: build
 	@./bin/proj
