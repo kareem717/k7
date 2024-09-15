@@ -30,7 +30,7 @@ type APIApp struct {
 	Framework    apiFlags.Framework
 	DBMS         apiFlags.DBMS
 	FrameworkMap map[apiFlags.Framework]Framework
-	DBMSMap      map[apiFlags.DBMS]Driver
+	DBMSMap      map[apiFlags.DBMS]DBMS
 	GitOptions   flags.Git
 	UnixBased    bool
 }
@@ -49,7 +49,7 @@ func NewAPIApp(
 		Framework:    framework,
 		FrameworkMap: make(map[apiFlags.Framework]Framework),
 		DBMS:         dbms,
-		DBMSMap:      make(map[apiFlags.DBMS]Driver),
+		DBMSMap:      make(map[apiFlags.DBMS]DBMS),
 		GitOptions:   gitOptions,
 		UnixBased:    unixBased,
 	}
@@ -62,9 +62,9 @@ type Framework struct {
 	templater   Templater
 }
 
-type Driver struct {
+type DBMS struct {
 	packageName []string
-	templater   DBDriverTemplater
+	templater   DBMSTemplater
 }
 
 // A Templater has the methods that help build the files
@@ -76,7 +76,7 @@ type Templater interface {
 	TestHandler() []byte
 }
 
-type DBDriverTemplater interface {
+type DBMSTemplater interface {
 	Service() []byte
 	Env() []byte
 	Tests() []byte
@@ -120,8 +120,6 @@ func (p *APIApp) ExitCLI(prog *tea.Program) {
 	}
 }
 
-// createFrameWorkMap adds the current supported
-// Frameworks into a Project's FrameworkMap
 func (p *APIApp) createFrameworkMap() {
 	p.FrameworkMap[apiFlags.Huma] = Framework{
 		packageName: humaPackage,
@@ -130,7 +128,7 @@ func (p *APIApp) createFrameworkMap() {
 }
 
 func (p *APIApp) createDBMSMap() {
-	p.DBMSMap[apiFlags.Postgres] = Driver{
+	p.DBMSMap[apiFlags.Postgres] = DBMS{
 		//TODO: clean this up
 		packageName: append(append(pgxPostgresDriver, bunPackages...), bunPgDialectPackage...),
 		templater:   dbms.PostgresTemplate{},
@@ -173,8 +171,6 @@ func (p *APIApp) CreateMainFile() error {
 		}
 	}
 
-	fmt.Printf("projectPath: %v\n", projectPath)
-
 	// Define Operating system
 	p.SetUnixBased()
 
@@ -198,12 +194,14 @@ func (p *APIApp) CreateMainFile() error {
 		cobra.CheckErr(err)
 	}
 
+	// Install the correct package for the selected DBMS
 	err = utils.GoGetPackage(projectPath, p.DBMSMap[p.DBMS].packageName)
 	if err != nil {
-		log.Printf("Could not install go dependency for chosen driver %v\n", err)
+		log.Printf("Could not install go dependency for chosen DBMS %v\n", err)
 		cobra.CheckErr(err)
 	}
 
+	// Create the storage folder
 	err = p.CreatePath(internalStoreagePath, projectPath)
 	if err != nil {
 		log.Printf("Error creating path: %s", internalStoreagePath)
@@ -211,7 +209,7 @@ func (p *APIApp) CreateMainFile() error {
 		return err
 	}
 
-	//TODO: I don't think this is setting stuff up properly
+	// Create the DBMS.go file
 	err = p.CreateFileWithInjection(internalStoreagePath, projectPath, "DBMS.go", "DBMS")
 	if err != nil {
 		log.Printf("Error injecting DBMS.go file: %v", err)

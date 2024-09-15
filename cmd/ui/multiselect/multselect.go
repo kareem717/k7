@@ -1,6 +1,4 @@
-// Package multiSelect provides functions that
-// help define and draw a multi-select step
-package multiSelect
+package multiselect
 
 import (
 	"fmt"
@@ -21,7 +19,7 @@ var (
 	descriptionStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#40BDA3"))
 )
 
-// A Selection represents a choice made in a multiSelect step
+// A Selection represents a choice made in a multiselect step
 type Selection struct {
 	Choices map[string]bool
 }
@@ -31,7 +29,7 @@ func (s *Selection) Update(optionName string, value bool) {
 	s.Choices[optionName] = value
 }
 
-// A multiSelect.model contains the data for the multiSelect step.
+// A multiselect.model contains the data for the multiselect step.
 //
 // It has the required methods that make it a bubbletea.Model
 type model struct {
@@ -47,9 +45,9 @@ func (m model) Init() tea.Cmd {
 	return nil
 }
 
-// InitialModelMulti initializes a multiSelect step with
+// InitialModelMulti initializes a multiselect step with
 // the given data
-func InitialModelMultiSelect(options []steps.Item, selection *Selection, header string, program *program.Project) model {
+func InitialModelmultiselect(options []steps.Item, selection *Selection, header string, program *program.Project) model {
 	return model{
 		options:  options,
 		selected: make(map[int]struct{}),
@@ -95,7 +93,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View is called to draw the multiSelect step
+// View is called to draw the multiselect step
 func (m model) View() string {
 	s := m.header + "\n\n"
 

@@ -6,23 +6,30 @@ import (
 
 type PostgresTemplate struct{}
 
-//go:embed files/storage/postgres.tmpl
-var postgresServiceTemplate []byte
+//go:embed files/storage/postgres/storage.go.tmpl
+var postgresStorageTemplate []byte
 
-//go:embed files/env/postgres.tmpl
+//go:embed files/storage/postgres/migrations/20240828191000_create_foo_table.sql.tmpl
+var postgresMigrationTemplate []byte
+
+//go:embed files/env/postgres.env.tmpl
 var postgresEnvTemplate []byte
 
-//go:embed files/tests/postgres.tmpl
-var postgresTestcontainersTemplate []byte
-
-func (m PostgresTemplate) Service() []byte {
-	return postgresServiceTemplate
+// Implementation returns a byte slice that represents
+// the postgres storage implementation.
+func (m PostgresTemplate) Implementation() []byte {
+	return postgresStorageTemplate
 }
 
+// Env returns a byte slice that represents
+// the postgres environment variables.
 func (m PostgresTemplate) Env() []byte {
 	return postgresEnvTemplate
 }
 
-func (m PostgresTemplate) Tests() []byte {
-	return postgresTestcontainersTemplate
+// InitialMigration returns a byte slice that represents
+// the initial postgres migration, providing a foo table and helper functions.
+func (m PostgresTemplate) InitialMigration() []byte {
+	return postgresMigrationTemplate
 }
+

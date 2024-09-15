@@ -1,9 +1,5 @@
-// Package steps provides utility for creating
-// each step of the CLI
 package steps
 
-// A StepSchema contains the data that is used
-// for an individual step of the CLI
 type StepSchema struct {
 	StepName string // The name of a given step
 	Options  []Item // The slice of each option for a given step

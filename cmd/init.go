@@ -16,7 +16,7 @@ import (
 	apiFlags "github.com/kareem717/k7/cmd/flags/api"
 	"github.com/kareem717/k7/cmd/program"
 	stepsPkg "github.com/kareem717/k7/cmd/steps"
-	"github.com/kareem717/k7/cmd/ui/multiInput"
+	"github.com/kareem717/k7/cmd/ui/multiinput"
 	"github.com/kareem717/k7/cmd/ui/spinner"
 	"github.com/kareem717/k7/cmd/ui/textinput"
 	"github.com/kareem717/k7/cmd/utils"
@@ -46,7 +46,7 @@ func init() {
 }
 
 type Options struct {
-	AppType *multiInput.Selection
+	AppType *multiinput.Selection
 	APIName *textinput.Output
 }
 
@@ -60,7 +60,7 @@ var initCmd = &cobra.Command{
 		var err error
 
 		options := Options{
-			AppType: &multiInput.Selection{},
+			AppType: &multiinput.Selection{},
 			APIName: &textinput.Output{},
 		}
 
@@ -74,7 +74,7 @@ var initCmd = &cobra.Command{
 		// CREATE APP TYPE STEP
 		isInteractive := true
 		step := steps.Steps[stepsPkg.AppType.String()]
-		tprogram = tea.NewProgram(multiInput.InitialModelMulti(step.Options, options.AppType, step.Headers, project))
+		tprogram = tea.NewProgram(multiinput.InitialModelMulti(step.Options, options.AppType, step.Headers, project))
 		if _, err := tprogram.Run(); err != nil {
 			cobra.CheckErr(textinput.CreateErrorInputModel(err).Err())
 		}
@@ -117,8 +117,8 @@ var initCmd = &cobra.Command{
 
 				// CREATE APP TYPE STEP
 				for name, step := range steps.Steps {
-					selection := &multiInput.Selection{}
-					tprogram = tea.NewProgram(multiInput.InitialModelMulti(step.Options, selection, step.Headers, project))
+					selection := &multiinput.Selection{}
+					tprogram = tea.NewProgram(multiinput.InitialModelMulti(step.Options, selection, step.Headers, project))
 					if _, err := tprogram.Run(); err != nil {
 						cobra.CheckErr(textinput.CreateErrorInputModel(err).Err())
 					}

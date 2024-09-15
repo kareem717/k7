@@ -29,5 +29,5 @@ func (f *DBMS) Set(value string) error {
 		}
 	}
 
-	return fmt.Errorf("database to use. Allowed values: %s", strings.Join(AllowedDBDrivers, ", "))
+	return fmt.Errorf("database system to use. Allowed values: %s", strings.Join(AllowedDBDrivers, ", "))
 }

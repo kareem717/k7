@@ -9,11 +9,9 @@ type App string
 
 const (
 	AppAPI    App = "api"
-	AppWeb    App = "web"
-	AppMobile App = "mobile"
 )
 
-var AllowedApps = []string{string(AppAPI), string(AppWeb), string(AppMobile)}
+var AllowedApps = []string{string(AppAPI)}
 
 func (f App) String() string {
 	return string(f)
