@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/template"
 
 	"github.com/kareem717/k7/cmd/flags"
 	apiFlags "github.com/kareem717/k7/cmd/flags/api"
@@ -236,14 +235,6 @@ func (p *APIApp) CreateMainFile() error {
 		cobra.CheckErr(err)
 	}
 
-	// Create the storage folder
-	err = shared.CreatePath(internalStoreagePath, projectPath)
-	if err != nil {
-		log.Printf("Error creating path: %s", internalStoreagePath)
-		cobra.CheckErr(err)
-		return err
-	}
-
 	injector, err := shared.NewTemplateInjector(projectPath, p)
 	if err != nil {
 		log.Printf("Error creating template injector: %v", err)
@@ -259,103 +250,24 @@ func (p *APIApp) CreateMainFile() error {
 		return err
 	}
 
-	err = p.CreateFileWithInjection(root, projectPath, "main.go", "main")
+	err = p.injectFrameworkFiles(injector)
 	if err != nil {
+		log.Printf("Error injecting framework files: %v", err)
 		cobra.CheckErr(err)
 		return err
 	}
 
-	makeFile, err := os.Create(filepath.Join(projectPath, "Makefile"))
+	err = p.injectWorkspaceFiles(injector)
 	if err != nil {
+		log.Printf("Error injecting workspace files: %v", err)
 		cobra.CheckErr(err)
 		return err
 	}
 
-	defer makeFile.Close()
-
-	// inject makefile template
-	makeFileTemplate := template.Must(template.New("makefile").Parse(string(framework.MakeTemplate())))
-	err = makeFileTemplate.Execute(makeFile, p)
+	err = p.injectEnvFile(injector)
 	if err != nil {
-		return err
-	}
-
-	readmeFile, err := os.Create(filepath.Join(projectPath, "README.md"))
-	if err != nil {
+		log.Printf("Error injecting env file: %v", err)
 		cobra.CheckErr(err)
-		return err
-	}
-	defer readmeFile.Close()
-
-	// inject readme template
-	readmeFileTemplate := template.Must(template.New("readme").Parse(string(framework.ReadmeTemplate())))
-	err = readmeFileTemplate.Execute(readmeFile, p)
-	if err != nil {
-		return err
-	}
-
-	err = shared.CreatePath(internalServerPath, projectPath)
-	if err != nil {
-		log.Printf("Error creating path: %s", internalServerPath)
-		cobra.CheckErr(err)
-		return err
-	}
-
-	err = p.CreateFileWithInjection(internalServerPath, projectPath, "routes.go", routesMethod)
-	if err != nil {
-		log.Printf("Error injecting routes.go file: %v", err)
-		cobra.CheckErr(err)
-		return err
-	}
-
-	err = p.CreateFileWithInjection(internalServerPath, projectPath, "routes_test.go", testsMethod)
-	if err != nil {
-		cobra.CheckErr(err)
-		return err
-	}
-
-	err = p.CreateFileWithInjection(internalServerPath, projectPath, "server.go", serverMethod)
-	if err != nil {
-		log.Printf("Error injecting server.go file: %v", err)
-		cobra.CheckErr(err)
-		return err
-	}
-
-	err = p.CreateFileWithInjection(root, projectPath, ".env", envMethod)
-	if err != nil {
-		log.Printf("Error injecting .env file: %v", err)
-		cobra.CheckErr(err)
-		return err
-	}
-
-	// Create gitignore
-	gitignoreFile, err := os.Create(filepath.Join(projectPath, ".gitignore"))
-	if err != nil {
-		cobra.CheckErr(err)
-		return err
-	}
-	defer gitignoreFile.Close()
-
-	// inject gitignore template
-	gitignoreTemplate := template.Must(template.New(".gitignore").Parse(string(framework.GitIgnoreTemplate())))
-	err = gitignoreTemplate.Execute(gitignoreFile, p)
-	if err != nil {
-		return err
-	}
-
-	// Create .air.toml file
-	airTomlFile, err := os.Create(filepath.Join(projectPath, ".air.toml"))
-	if err != nil {
-		cobra.CheckErr(err)
-		return err
-	}
-
-	defer airTomlFile.Close()
-
-	// inject air.toml template
-	airTomlTemplate := template.Must(template.New("airtoml").Parse(string(framework.AirTomlTemplate())))
-	err = airTomlTemplate.Execute(airTomlFile, p)
-	if err != nil {
 		return err
 	}
 
@@ -372,17 +284,7 @@ func (p *APIApp) CreateMainFile() error {
 		return err
 	}
 
-	nameSet, err := utils.CheckGitConfig("user.name")
-	if err != nil {
-		cobra.CheckErr(err)
-	}
-
-	if p.Git.String() != flags.Skip {
-		if !nameSet {
-			fmt.Println("user.name is not set in git config.")
-			fmt.Println("Please set up git config before trying again.")
-			panic("\nGIT CONFIG ISSUE: user.name is not set in git config.\n")
-		}
+	if p.Git != flags.Skip {
 		// Initialize git repo
 		err = utils.ExecuteCmd("git", []string{"init"}, projectPath)
 		if err != nil {
@@ -399,7 +301,7 @@ func (p *APIApp) CreateMainFile() error {
 			return err
 		}
 
-		if p.Git.String() == flags.Commit {
+		if p.Git == flags.Commit {
 			// Git commit files
 			err = utils.ExecuteCmd("git", []string{"commit", "-m", "Initial commit"}, projectPath)
 			if err != nil {
@@ -453,67 +355,81 @@ func (p *APIApp) injectDBMSFiles(ti *shared.TemplateInjector) error {
 	return nil
 }
 
-type fileInjectionMethod string
-
-const (
-	mainMethod             fileInjectionMethod = "main"
-	serverMethod           fileInjectionMethod = "server"
-	routesMethod           fileInjectionMethod = "routes"
-	DBMSMethod             fileInjectionMethod = "dbms"
-	integrationTestsMethod fileInjectionMethod = "integration-tests"
-	testsMethod            fileInjectionMethod = "tests"
-	envMethod              fileInjectionMethod = "env"
-)
-
-// CreateFileWithInjection creates the given file at the
-// project path, and injects the appropriate template
-func (p *APIApp) CreateFileWithInjection(pathToCreate string, projectPath string, fileName string, method fileInjectionMethod) error {
-	createdFile, err := os.Create(filepath.Join(projectPath, pathToCreate, fileName))
+func (p *APIApp) injectWorkspaceFiles(ti *shared.TemplateInjector) error {
+	// Create gitignore
+	err := ti.Inject(".gitignore", framework.GitIgnoreTemplate())
 	if err != nil {
+		log.Printf("Error injecting shared/shared.go file: %v", err)
+		cobra.CheckErr(err)
 		return err
 	}
 
-	defer createdFile.Close()
-
-	switch method {
-	case mainMethod:
-		createdTemplate := template.Must(template.New(fileName).Parse(string(p.FrameworkMap[p.Framework].templater.Main())))
-		err = createdTemplate.Execute(createdFile, p)
-	case serverMethod:
-		createdTemplate := template.Must(template.New(fileName).Parse(string(p.FrameworkMap[p.Framework].templater.Server())))
-		err = createdTemplate.Execute(createdFile, p)
-	case routesMethod:
-		routeFileBytes := p.FrameworkMap[p.Framework].templater.Routes()
-		createdTemplate := template.Must(template.New(fileName).Parse(string(routeFileBytes)))
-		err = createdTemplate.Execute(createdFile, p)
-	case DBMSMethod:
-		//todo: create interface, migration files
-
-		createdTemplate := template.Must(template.New(fileName).Parse(string(p.DBMSMap[p.DBMS].templater.Implementation())))
-		err = createdTemplate.Execute(createdFile, p)
-	case integrationTestsMethod:
-		createdTemplate := template.Must(template.New(fileName).Parse(string(p.DBMSMap[p.DBMS].templater.InitialMigration())))
-		err = createdTemplate.Execute(createdFile, p)
-	case testsMethod:
-		createdTemplate := template.Must(template.New(fileName).Parse(string(p.FrameworkMap[p.Framework].templater.TestHandler())))
-		err = createdTemplate.Execute(createdFile, p)
-	case envMethod:
-		if p.DBMS != "none" {
-
-			envBytes := [][]byte{
-				tpl.GlobalEnvTemplate(),
-				p.DBMSMap[p.DBMS].templater.Env(),
-			}
-			createdTemplate := template.Must(template.New(fileName).Parse(string(bytes.Join(envBytes, []byte("\n")))))
-			err = createdTemplate.Execute(createdFile, p)
-
-		} else {
-			createdTemplate := template.Must(template.New(fileName).Parse(string(tpl.GlobalEnvTemplate())))
-			err = createdTemplate.Execute(createdFile, p)
-		}
+	// Create air config file
+	err = ti.Inject(".air.toml", framework.AirTomlTemplate())
+	if err != nil {
+		log.Printf("Error injecting shared/shared.go file: %v", err)
+		cobra.CheckErr(err)
+		return err
 	}
 
+	// Create Makefile
+	err = ti.Inject("Makefile", framework.MakeTemplate())
 	if err != nil {
+		log.Printf("Error injecting shared/shared.go file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	// Create README.md
+	err = ti.Inject("README.md", framework.ReadmeTemplate())
+	if err != nil {
+		log.Printf("Error injecting shared/shared.go file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	return nil
+}
+
+func (p *APIApp) injectFrameworkFiles(ti *shared.TemplateInjector) error {
+	frameworkConfig := p.FrameworkMap[p.Framework]
+
+	err := ti.Inject(filepath.Join("main.go"), frameworkConfig.templater.Main())
+	if err != nil {
+		log.Printf("Error injecting main.go file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	err = ti.Inject(filepath.Join(internalServerPath, "server.go"), frameworkConfig.templater.Server())
+	if err != nil {
+		log.Printf("Error injecting server.go file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	err = ti.Inject(filepath.Join(internalServerPath, "router.go"), frameworkConfig.templater.Routes())
+	if err != nil {
+		log.Printf("Error injecting router.go file: %v", err)
+		cobra.CheckErr(err)
+		return err
+	}
+
+	return nil
+}
+
+func (p *APIApp) injectEnvFile(ti *shared.TemplateInjector) error {
+	envBytes := [][]byte{
+		tpl.GlobalEnvTemplate(),
+		p.DBMSMap[p.DBMS].templater.Env(),
+	}
+
+	templ := bytes.Join(envBytes, []byte("\n"))
+
+	err := ti.Inject(".env", templ)
+	if err != nil {
+		log.Printf("Error injecting .env file: %v", err)
+		cobra.CheckErr(err)
 		return err
 	}
 
