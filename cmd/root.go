@@ -5,9 +5,9 @@ package cmd
 
 import (
 	"fmt"
-	"k7/cmd/config"
-	"k7/cmd/sub"
 	"os"
+
+	initCmd "github.com/kareem717/k7/cmd/init"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -39,6 +39,10 @@ func Execute() {
 	}
 }
 
+func addCommands() {
+	rootCmd.AddCommand(initCmd.InitCmd)
+}
+
 func init() {
 	cobra.OnInitialize(initConfig)
 
@@ -46,11 +50,9 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	// add sub commands
-	rootCmd.AddCommand(sub.SubCmd)
-	rootCmd.AddCommand(config.ConfigCmd)
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./.github.com/kareem717/k7.yaml)")
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./.k7.yaml)")
+	addCommands()
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -64,14 +66,13 @@ func initConfig() {
 		viper.SetConfigFile(cfgFile)
 	} else {
 
-
-		// Search config in home directory with name ".k7" (without extension).
+		// Search config in home directory with name ".github.com/kareem717/k7" (without extension).
 		viper.AddConfigPath(".")
 		viper.SetConfigType("yaml")
-		viper.SetConfigName(".k7")
+		viper.SetConfigName(".github.com/kareem717/k7")
 	}
 
-	viper.SetEnvPrefix("K7")
+	viper.SetEnvPrefix("github.com/kareem717/k7")
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.

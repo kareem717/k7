@@ -1,8 +1,8 @@
 build:
-	@go build -tags dev -o bin/k7 main.go  
+	@go build -tags dev -o bin/github.com/kareem717/k7 main.go  
 
 run: build
-	@./bin/k7
+	@./bin/github.com/kareem717/k7
 
 install:
 	@go get ./...
