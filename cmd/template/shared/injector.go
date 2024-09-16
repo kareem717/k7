@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"fmt"
 	"html/template"
 	"os"
 	"path/filepath"
@@ -31,26 +32,30 @@ func NewTemplateInjector(basePath string, params interface{}) (*TemplateInjector
 
 // CreateFileWithInjection creates the given file at the
 // project path, and injects the appropriate template
-func (ti *TemplateInjector) Inject(filePath string, templateBytes []byte) error {
-	fullPath := filepath.Join(ti.basePath, filePath)
 
-	// Create the directory if it doesn't exist
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0770); err != nil {
-		return err
-	}
 
-	createdFile, err := os.Create(fullPath)
-	if err != nil {
-		return err
-	}
+func (ti *TemplateInjector) Inject(input ...Injectable) error {
+	for _, i := range input {
+		fullPath := filepath.Join(ti.basePath, i.FilePath)
 
-	defer createdFile.Close()
+		// Create the directory if it doesn't exist
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0770); err != nil {
+			return fmt.Errorf("error creating directory %s: %w", filepath.Dir(fullPath), err)
+		}
 
-	createdTemplate := template.Must(template.New(filePath).Parse(string(templateBytes)))
+		createdFile, err := os.Create(fullPath)
+		if err != nil {
+			return fmt.Errorf("error creating file %s: %w", fullPath, err)
+		}
 
-	err = createdTemplate.Execute(createdFile, ti.params)
-	if err != nil {
-		return err
+		defer createdFile.Close()
+
+		createdTemplate := template.Must(template.New(i.FilePath).Parse(string(i.Bytes)))
+
+		err = createdTemplate.Execute(createdFile, ti.params)
+		if err != nil {
+			return fmt.Errorf("error executing template for file %s: %w", fullPath, err)
+		}
 	}
 
 	return nil
